@@ -97,47 +97,47 @@ void exec_redir(char** tokens) {
 void exec_pipe(char** tokens, int no_commands, int command_indices[]) {
 	pid_t pid;
 	if((pid = fork()) < 0) {
-		perror("Fork error! Aborting.");
-		return;
+	    perror("Fork error! Aborting.");
+	    return;
 	}
 	else if(pid > 0) {
-		//parent (shell process)
-		wait(NULL);
+	    //parent (shell process)
+	    wait(NULL);
 	}
 	else {
-		//"oldest" child (rightmost command)
-		int i;
-		for(i = 0; i < no_commands;) {
-			int pipe_fd[2];
-			if(pipe(pipe_fd) < 0) {
-				perror("Pipe error! Aborting.");
-				return;
-			}
-			if((pid = fork()) < 0) {
-				perror("Fork error! Aborting.");
-				return;
-			}
-			else if(pid > 0) {
-				//close read end
-				close(pipe_fd[0]);
-				if(dup2(pipe_fd[1], STDOUT_FILENO) < 0) {
-					perror("Dup error! Aborting");
-					return;
-				}
-				execvp(tokens[command_indices[i]], &tokens[command_indices[i]]);
-			}
-			else {
-				//increment i so we execv the correct command
-				i++;
-				//child to run reading command
-				close(pipe_fd[1]);
-				if(dup2(pipe_fd[0], STDIN_FILENO) < 0) {
-					perror("Dup error! Aborting");
-					return;
-				}
-				execvp(tokens[command_indices[i]], &tokens[command_indices[i]]);
-			}
-		}
+	    //"oldest" child (rightmost command)
+	    int i;
+	    for(i = 0; i < no_commands;) {
+            int pipe_fd[2];
+                if(pipe(pipe_fd) < 0) {
+                perror("Pipe error! Aborting.");
+                return;
+            }
+            if((pid = fork()) < 0) {
+                perror("Fork error! Aborting.");
+                return;
+            }
+            else if(pid > 0) {
+                //close read end
+                close(pipe_fd[0]);
+                if(dup2(pipe_fd[1], STDOUT_FILENO) < 0) {
+                    perror("Dup error! Aborting");
+                    return;
+                }
+                execvp(tokens[command_indices[i]], &tokens[command_indices[i]]);
+            }
+            else {
+                //increment i so we execv the correct command
+                i++;
+                //child to run reading command
+                close(pipe_fd[1]);
+                if(dup2(pipe_fd[0], STDIN_FILENO) < 0) {
+                    perror("Dup error! Aborting");
+                    return;
+                }
+                execvp(tokens[command_indices[i]], &tokens[command_indices[i]]);
+            }
+	    }
 	}
 }
 
@@ -196,88 +196,84 @@ int main() {
 
     //main program loop
     //exit condition is lower down, if "exit" is entered or term_requested == true
-    while(1) {
+    int cont = 1;
+    while(cont) {
         //allocate for user input
         char* input = malloc(COMMAND_LEN);
         check_valid_alloc(input, "main_input");
         //prompt
         printf("%s> ", username);
-        //read until newline, discard anything after it
-        scanf("%[^\n]%*c", input);
+        //get input
+        fgets(input, COMMAND_LEN, stdin);
 
-        if(strcmp(input, "")) {
-        	//TODO this still does not work as intended!
-        	//if input is not empty
-			history = update_history(history, input, &hist_size);
+        //TODO this still does not work as intended!
+        //if input is not empty
+        history = update_history(history, input, &hist_size);
 
-			//if they entered "history", output it now that it is up-to-date
-			if(!strcmp(input, "history")) {
-				printf("%s\n", history);
-			}
-			//if they entered "exit" or sent SIGTERM, exit
-			else if(!strcmp(input, "exit") || term_requested) {
-				printf("Exit requested\n");
-				return 0;
-			}
-			//else, it's a command, analyze to figure out what to do next
-			else {
-				//tokenize input to determine what kind of command we have
-				int num_tokens, i, command_type = 0;
-				char** tokens = tokenize_string(input, &num_tokens);
+        //if they entered "history", output it now that it is up-to-date
+        if(!strcmp(input, "history")) {
+            printf("%s\n", history);
+        }
+        //if they entered "exit" or sent SIGTERM, exit
+        else if(!strcmp(input, "exit") || term_requested) {
+            printf("Exit requested\n");
+            cont = 0;
+        }
+        //else, it's a command, analyze to figure out what to do next
+        else {
+            //tokenize input to determine what kind of command we have
+            int num_tokens, i, command_type = 0;
+            char** tokens = tokenize_string(input, &num_tokens);
 
-				for(i = 0; i < num_tokens; i++) {
-					//check for invalid command flag
-					if(command_type == -1)
-						break;
-					//loop through tokens looking for redirection or pipe
-					if(!strcmp(tokens[i], "<")) {
-						command_indices[command_counter++] = i;
-						if(command_type == 1 || command_type > 4)
-							//this indicates that there are two '<'s or a pipe, which is not valid
-							command_type = -1;
-						else if(command_type == 2)
-							//this indicates that the command has > followed by <
-							command_type = 3;
-						else
-							command_type = 1;
-					}
-					else if(!strcmp(tokens[i], ">")) {
-						command_indices[command_counter++] = i;
-						if(command_type == 2 || command_type > 4)
-							//two '>'s or pipe, not valid
-							command_type = -1;
-						else if(command_type == 1)
-							// < followed by >
-							command_type = 4;
-						else
-							command_type = 2;
-					}
-					else if(!strcmp(tokens[i], "|")) {
-						//replace the | with a 0 so that execv will end the command there
-						tokens[i] = 0;
-						command_indices[command_counter++] = i;
-						//one or more pipes
-						if(command_type >= 2 && command_type <= 4)
-							command_type = -1;
-						else
-							command_type = 5;
-					}
-				}
-				//no redirection of any kind
-				if(command_type == -1)
-					printf("%s is not a valid command, please try again.\n", input);
-				else if(command_type == 0)
-					exec_normal(tokens);
-				//else if(command_type >= 2 && command_type <= 4)
-				else if(command_type == 5)
-					//#pipes 	= command_type - 4
-					//#commands = # pipes + 1
-					exec_pipe(tokens, command_counter, command_indices);
-			}
-    	}
+            for(i = 0; i < num_tokens; i++) {
+                //check for invalid command flag
+                if(command_type == -1)
+                    break;
+                //loop through tokens looking for redirection or pipe
+                if(!strcmp(tokens[i], "<")) {
+                    command_indices[command_counter++] = i;
+                    if(command_type == 1 || command_type > 4)
+                        //this indicates that there are two '<'s or a pipe, which is not valid
+                        command_type = -1;
+                    else if(command_type == 2)
+                        //this indicates that the command has > followed by <
+                        command_type = 3;
+                    else
+                        command_type = 1;
+                }
+                else if(!strcmp(tokens[i], ">")) {
+                    command_indices[command_counter++] = i;
+                    if(command_type == 2 || command_type > 4)
+                        //two '>'s or pipe, not valid
+                        command_type = -1;
+                    else if(command_type == 1)
+                        // < followed by >
+                        command_type = 4;
+                    else
+                        command_type = 2;
+                }
+                else if(!strcmp(tokens[i], "|")) {
+                    command_indices[command_counter++] = i;
+                    //one or more pipes
+                    if(command_type >= 2 && command_type <= 4)
+                        command_type = -1;
+                    else
+                        command_type = 5;
+                }
+            }
+            //no redirection of any kind
+            if(command_type == -1)
+                printf("%s is not a valid command, please try again.\n", input);
+            else if(command_type == 0)
+                exec_normal(tokens);
+            else if(command_type >= 2 && command_type <= 4)
+                exec_redir(tokens);
+            else if(command_type == 5)
+                //#pipes 	= command_type - 4
+                //#commands = # pipes + 1
+                exec_pipe(tokens, command_counter, command_indices);
+        }   //end command execution block
     }   //end MAIN LOOP
-    //should never happen
-    printf("Shell terminating in an unusual way!\n");
-    return 1;
+    return 0;
 }
 
