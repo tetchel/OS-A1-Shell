@@ -1,0 +1,16 @@
+total 76
+-rw-rw-r-- 1 tim tim     1 Feb  5 22:16 2
+-rw-rw-r-- 1 tim tim     3 Feb  5 22:12 3
+-rw-rw-r-- 1 tim tim   740 Feb  3 14:25 3305-shell.cbp
+-rw-rw-r-- 1 tim tim   351 Feb  5 12:53 3305-shell.depend
+-rw-rw-r-- 1 tim tim   360 Feb  5 12:53 3305-shell.layout
+-rw-rw-r-- 1 tim tim     7 Feb  5 22:24 5
+drwxrwxr-x 1 tim tim    10 Feb  3 14:25 bin
+-rw-rw-r-- 1 tim tim     0 Feb  5 22:25 hello.txt
+-rw-rw-r-- 1 tim tim   503 Feb  5 22:16 lsfile
+-rw-rw-r-- 1 tim tim    12 Feb  5 21:43 numbe1
+-rw-rw-r-- 1 tim tim    12 Feb  5 21:44 numbeq
+-rw-rw-r-- 1 tim tim     8 Feb  5 22:24 numbersfile
+drwxrwxr-x 1 tim tim    10 Feb  3 14:25 obj
+-rwxrwxr-x 1 tim tim 20487 Feb  5 22:25 shell
+-rw-rw-r-- 1 tim tim 11590 Feb  5 22:25 shell.c

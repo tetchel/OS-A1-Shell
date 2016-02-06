@@ -3,6 +3,7 @@
     *	Author: Tim Etchells
 **/
 
+//for asprintf
 #define _GNU_SOURCE
 #include <stdio.h>
 #include <unistd.h>
@@ -65,7 +66,7 @@ void exec_normal(char** tokens) {
     }
     else if (pid < 0) {
         perror("Forking error! Aborting");
-        return;
+        exit(EXIT_FAILURE);
     }
     else {
         //child
@@ -107,7 +108,7 @@ void exec_redir(char** tokens, int no_tokens, int command_type, int no_commands,
     pid_t pid;
     if((pid = fork()) < 0) {
 	perror("Fork error! Aborting");
-	return;
+	exit(EXIT_FAILURE);
     }
     else if(pid > 0) {
 	//parent
@@ -151,7 +152,7 @@ void start_piped_process(int in_fd, int out_fd, char** command) {
     if((pid = fork()) < 0) {
 	//error
 	perror("Fork error! Aborting");
-	return;
+	exit(EXIT_FAILURE);
     }
     else if(pid == 0) {
 	//child
@@ -211,6 +212,7 @@ void exec_pipe(char** tokens, int no_tokens, int no_commands, int command_indice
 	    command = extract_command(tokens, command_indices[i], command_indices[i+1]-1);
 	    //set up the pipe
 	    pipe(fd);
+	    //start the process with this new set of fd's
 	    start_piped_process(in_fd, fd[1], command);
 	    //close the pipe'd fd
 	    close(fd[1]);
@@ -234,7 +236,8 @@ void terminate(int signum) {
     term_requested = 1;
 }
 
-char* update_history(char* history, char* input, int* hist_size) {
+//append input to history, remove the oldest history item if necessary
+char* update_history(char* history, const char* input, int* hist_size) {
     //check if deletion of oldest history is required
     if(*hist_size >= HIST_MAX) {
         //delete up to the first \n
@@ -269,7 +272,7 @@ int main() {
     sigaction(SIGTERM, &action, NULL);
     //end term handler
 
-    //Start by obtaining username for prompt
+    //start by obtaining username for prompt
     const char* username = get_username();
     //history is stored as one long string delimited by \n
     char* history;
@@ -286,7 +289,7 @@ int main() {
     //exit condition is lower down, if "exit" is entered or term_requested == true
     while(1) {
         //allocate for user input
-        char* input = calloc(COMMAND_LEN, 0);
+        char* input = malloc(COMMAND_LEN);
         if(!input) {
 	    perror("Malloc error! Aborting");
 	    exit(EXIT_FAILURE);
@@ -295,12 +298,17 @@ int main() {
         printf("%s> ", username);
         //get input
         fgets(input, COMMAND_LEN, stdin);
-	//chop off the newline
-	input[strlen(input)-1] = '\0';
 	
-        //if input is not empty
-	if(strlen(input) > 0)
-	    history = update_history(history, input, &hist_size);
+	//chop off the newline
+	int i = 0;
+	while(input[i] != '\n')
+	    i++;
+	input[i] = '\0';
+    
+	//if input is not empty
+	if(strlen(input) > 0) {
+	    history = update_history(history, input, &hist_size);	    
+	}
 	else
 	    continue;
 
@@ -310,13 +318,12 @@ int main() {
         }
         //if they entered "exit" or sent SIGTERM, exit
         else if(!strcmp(input, "exit") || term_requested) {
-            printf("Exit requested\n");
 	    return 0;
 	}
         //else, it's a command, analyze to figure out what to do next
         else {
             //tokenize input to determine what kind of command we have
-            int num_tokens, i, command_type = 0;
+            int num_tokens, command_type = 0;
             char* tokens[MAX_TOK];
             num_tokens = make_tokenlist(input, tokens);
 
@@ -326,8 +333,8 @@ int main() {
                     break;
                 //loop through tokens looking for redirection or pipe
                 if(!strcmp(tokens[i], "<")) {
-                    command_indices[command_counter++] = i+1;
-		    printf("A command starts at %d\n", command_indices[command_counter-1]);
+                    //if there's an operator here, it means the next token (i+1) is the start of a command
+		    command_indices[command_counter++] = i+1;
                     if(command_type == 1 || command_type > 4)
                         //this indicates that there are two '<'s or a pipe, which is not valid
                         command_type = -1;
@@ -339,7 +346,6 @@ int main() {
                 }
                 else if(!strcmp(tokens[i], ">")) {
                     command_indices[command_counter++] = i+1;
-		    printf("A command starts at %d\n", command_indices[command_counter-1]);
 		    if(command_type == 2 || command_type > 4)
                         //two '>'s or pipe, not valid
                          command_type = -1;
@@ -358,6 +364,7 @@ int main() {
                         command_type = 5;
                 }
             }
+	    //now that we know the command type, call the appropriate function
             if(command_type == -1)
                 printf("Not a valid command, please try again.\n");
             else if(command_type == 0)
