@@ -26,7 +26,7 @@ volatile int term_requested = 0;
 //adapted from http://stackoverflow.com/questions/8953424/how-to-get-the-username-in-c-c-in-linux
 const char* get_username() {
     uid_t uid = geteuid();		    //returns effective userid of current user
-    struct passwd* pw = getpwuid(uid);	    //get passwd for that user
+    struct passwd* pw = getpwuid(uid);	    //get struct passwd (login info) for that user
     const char* retval = pw->pw_name;	    //get username from the passwd
 
     //return if valid result, else perror and return ""
@@ -117,22 +117,27 @@ void exec_redir(char** tokens, int no_tokens, int command_type, int no_commands,
     else {
 	//child, perform the command
 	if(command_type == 1 || command_type == 3) {
+	    //dupe stdin
 	    int input = open(second, O_RDONLY);
 	    dup2_(input, STDIN_FILENO);
 	    close(input);
+	    //dupe stdout if an outfile is specified
 	    if(command_type == 3) {
 		int output = open(third, O_WRONLY | O_CREAT, 0666);
 		dup2_(output, STDOUT_FILENO);
 		close(output);
 	    }
+	    //run command
 	    execvp(tokens[0], tokens);
 	    perror("Exec error");
 	    exit(EXIT_FAILURE);
 	}
 	else if(command_type == 2 || command_type == 4) {
+	    //dupe stdout
 	    int output = open(second, O_WRONLY | O_CREAT, 0666);
 	    dup2_(output, STDOUT_FILENO);
 	    close(output);
+	    //dupe stdin if infile is specified
 	    if(command_type == 4) {
 		int input = open(third, O_RDONLY);
 		dup2_(input, STDIN_FILENO);
@@ -192,7 +197,9 @@ char** extract_command(char** tokens, int start, int end) {
 void exec_pipe(char** tokens, int no_tokens, int no_commands, int command_indices[]) {
     pid_t pid;
     int in_fd, i, fd[2];
-    
+   
+    fflush(0);
+     
     if((pid = fork()) < 0) {
 	perror("Fork error! Aborting");
 	exit(EXIT_FAILURE);
